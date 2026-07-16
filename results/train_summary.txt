@@ -1,0 +1,3 @@
+save_dir=/home/shiven/Artikate_assignment/runs/detect/smoke_v1
+best=/home/shiven/Artikate_assignment/runs/detect/smoke_v1/weights/best.pt
+epochs=15 batch=2 imgsz=640 device=cpu
