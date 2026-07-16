@@ -35,3 +35,4 @@ results/*.mp4
 .vscode/
 *.log
 .ultralytics/
+yolov8n.pt
