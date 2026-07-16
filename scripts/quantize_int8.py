@@ -21,6 +21,15 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
+def _clamp_ir(path: Path, max_ir: int = 10) -> None:
+    import onnx
+
+    model = onnx.load(str(path))
+    if model.ir_version > max_ir:
+        model.ir_version = max_ir
+        onnx.save(model, str(path))
+
+
 def main() -> None:
     args = parse_args()
     ensure_output_dirs()
@@ -33,17 +42,19 @@ def main() -> None:
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
 
-    # Dynamic quantization: weights → INT8; activations remain float at runtime.
-    # Suitable for CPU ORT demos. Jetson deployments should prefer TensorRT PTQ/QAT.
+    # Full Conv dynamic INT8 often emits ConvInteger, which many CPU ORT builds
+    # cannot execute for YOLO graphs. Prefer MatMul/Gemm weight-only INT8.
     quantize_dynamic(
         model_input=str(src),
         model_output=str(out),
         weight_type=QuantType.QInt8,
+        op_types_to_quantize=["MatMul", "Gemm"],
     )
-    print(f"INT8 (dynamic) ONNX → {out}")
+    _clamp_ir(out)
+    print(f"INT8 (dynamic MatMul/Gemm) ONNX → {out}")
     print(
-        "Note: dynamic INT8 ≠ TensorRT calibration INT8. "
-        "Report both latency and any accuracy delta honestly."
+        "Note: this is weight-only dynamic INT8 on CPU ORT, not TensorRT PTQ. "
+        "Jetson numbers will differ; re-benchmark on target hardware."
     )
 
 

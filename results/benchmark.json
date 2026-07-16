@@ -1,0 +1,26 @@
+{
+  "hardware_note": "CPU ONNX Runtime on local laptop",
+  "image_shape": [
+    480,
+    640,
+    3
+  ],
+  "fp32": {
+    "model": "weights/best.onnx",
+    "runs": 20,
+    "latency_ms_mean": 127.22798704999718,
+    "latency_ms_median": 120.41398849993357,
+    "latency_ms_p95": 169.63503430001768,
+    "latency_ms_min": 98.38147999994362,
+    "latency_ms_max": 212.35289200001262
+  },
+  "int8_dynamic": {
+    "model": "weights/best_int8.onnx",
+    "runs": 20,
+    "latency_ms_mean": 98.29657725001084,
+    "latency_ms_median": 96.05711050005539,
+    "latency_ms_p95": 111.83794375000957,
+    "latency_ms_min": 87.8837290000547,
+    "latency_ms_max": 114.07216800000697
+  }
+}

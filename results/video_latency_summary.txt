@@ -1,0 +1,6 @@
+frames=45
+latency_ms_mean=109.707
+latency_ms_median=105.444
+latency_ms_p95=144.788
+model=weights/best.onnx
+video=data/smoke/video/heldout_smoke.mp4

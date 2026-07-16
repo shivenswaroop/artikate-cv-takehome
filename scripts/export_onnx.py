@@ -41,10 +41,20 @@ def main() -> None:
         simplify=True,
         dynamic=False,
     )
-    exported_path = Path(exported)
-    out = Path(args.out)
+    exported_path = Path(exported).resolve()
+    out = Path(args.out).resolve()
     out.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(exported_path, out)
+    if exported_path != out:
+        shutil.copy2(exported_path, out)
+
+    # Older ORT builds reject high IR versions from recent onnx exporters.
+    import onnx
+
+    model = onnx.load(str(out))
+    if model.ir_version > 10:
+        model.ir_version = 10
+        onnx.save(model, str(out))
+        print(f"Clamped ONNX ir_version → 10 for ORT compatibility")
     print(f"ONNX model → {out}")
 
 
