@@ -109,8 +109,6 @@ Artifacts: `results/benchmark.json`, `results/val_metrics.json`, `results/video_
 
 ## GitHub
 
-Push after `gh auth login` (token on this machine was invalid when last checked):
+Public repo: https://github.com/shivenswaroop/artikate-cv-takehome
 
-```bash
-gh repo create artikate-cv-takehome --public --source=. --remote=origin --push
-```
+Loom still needs your screen recording after the private clip arrives (`LOOM_URL` above).
