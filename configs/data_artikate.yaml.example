@@ -1,0 +1,10 @@
+# Copy to data.yaml (or pass --data) once private dataset is installed.
+path: data/artikate
+train: images/train
+val: images/val
+
+# Fill from the provided dataset annotation schema
+names:
+  0: defect  # replace with real class names
+
+nc: 1

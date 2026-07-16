@@ -1,0 +1,10 @@
+# Default points at the local smoke dataset.
+# When Artikate private data arrives, point paths at data/artikate/ and update names/nc.
+path: data/smoke
+train: images/train
+val: images/val
+
+names:
+  0: object
+
+nc: 1

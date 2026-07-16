@@ -1,0 +1,37 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.venv_run/
+venv/
+.env
+.DS_Store
+
+# Large / local artifacts
+*.pt
+*.onnx
+*.engine
+runs/
+weights/
+.ultralytics_config/
+
+data/smoke/images/
+data/smoke/labels/
+data/smoke/video/
+data/artikate/**
+!data/artikate/README.md
+!data/smoke/README.md
+
+# Keep small result summaries; ignore bulky dumps
+results/frames/
+results/*.mp4
+*.jpg
+*.jpeg
+*.png
+*.bmp
+!docs/**/*.png
+
+.idea/
+.vscode/
+*.log
+.ultralytics/
