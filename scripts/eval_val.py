@@ -22,6 +22,7 @@ if str(ROOT) not in sys.path:
 
 from src.onnx_infer import YoloOnnxDetector
 from src.paths import RESULTS_DIR, WEIGHTS_DIR, ensure_output_dirs
+from src.resolve_data_yaml import materialize_data_yaml
 
 
 def parse_args() -> argparse.Namespace:
@@ -140,8 +141,9 @@ def main() -> None:
         from ultralytics import YOLO
 
         model = YOLO(args.weights)
+        data_resolved = materialize_data_yaml(data)
         metrics = model.val(
-            data=str(data), imgsz=args.imgsz, device=args.device, split="val"
+            data=str(data_resolved), imgsz=args.imgsz, device=args.device, split="val"
         )
         box = metrics.box
         report = {

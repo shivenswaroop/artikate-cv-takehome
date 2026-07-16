@@ -12,6 +12,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.paths import RESULTS_DIR, WEIGHTS_DIR, ensure_output_dirs
+from src.resolve_data_yaml import materialize_data_yaml
 
 
 def parse_args() -> argparse.Namespace:
@@ -22,7 +23,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--imgsz", type=int, default=640)
     p.add_argument("--batch", type=int, default=2, help="Keep small on ~8GB RAM laptops")
     p.add_argument("--device", type=str, default="cpu")
-    p.add_argument("--workers", type=int, default=2)
+    p.add_argument("--workers", type=int, default=0, help="0 is safest on low-RAM CPUs")
     p.add_argument("--project", type=str, default="runs/detect")
     p.add_argument("--name", type=str, default="train")
     p.add_argument("--patience", type=int, default=20)
@@ -35,9 +36,10 @@ def main() -> None:
 
     from ultralytics import YOLO
 
+    data_yaml = materialize_data_yaml(args.data)
     model = YOLO(args.model)
     results = model.train(
-        data=str(ROOT / args.data) if not Path(args.data).is_absolute() else args.data,
+        data=str(data_yaml),
         epochs=args.epochs,
         imgsz=args.imgsz,
         batch=args.batch,
