@@ -1,10 +1,13 @@
-# Default points at the local smoke dataset.
-# When Artikate private data arrives, point paths at data/artikate/ and update names/nc.
-path: data/smoke
+# NEU-DET proxy client dataset (~150 images)
+path: data/proxy_neu
 train: images/train
 val: images/val
 
+nc: 6
 names:
-  0: object
-
-nc: 1
+  0: crazing
+  1: inclusion
+  2: patches
+  3: pitted_surface
+  4: rolled-in_scale
+  5: scratches

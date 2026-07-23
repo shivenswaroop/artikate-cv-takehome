@@ -21,15 +21,22 @@ data/smoke/video/
 data/artikate/**
 !data/artikate/README.md
 !data/smoke/README.md
+data/_cache/
 
 # Keep small result summaries; ignore bulky dumps
 results/frames/
 results/*.mp4
+# Ignore loose media at repo root / runs; allow proxy dataset images
 *.jpg
 *.jpeg
 *.png
 *.bmp
+!data/proxy_neu/**/*.jpg
+!data/proxy_neu/**/*.jpeg
+!data/proxy_neu/**/*.png
 !docs/**/*.png
+# Held-out video is local artifact (regenerate via prepare_neu_proxy.py)
+data/proxy_neu/video/
 
 .idea/
 .vscode/
