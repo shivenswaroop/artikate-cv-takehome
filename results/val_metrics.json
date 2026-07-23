@@ -1,9 +1,9 @@
 {
   "mode": "ultralytics_val",
-  "precision": 0.7991474453435449,
-  "recall": 0.918486244157549,
-  "mAP50": 0.9435555555555556,
-  "mAP50_95": 0.8227101554365082,
+  "precision": 0.5598386910190792,
+  "recall": 0.47716840154175627,
+  "mAP50": 0.5510593117219218,
+  "mAP50_95": 0.30711661130357687,
   "weights": "weights/best.pt",
   "data": "/home/shiven/Artikate_assignment/configs/data.yaml"
 }

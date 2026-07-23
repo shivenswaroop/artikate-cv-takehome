@@ -2,7 +2,27 @@
 
 End-to-end industrial detection pipeline: fine-tune **YOLOv8n** → export **ONNX** → run **ONNX Runtime (CPU)** → benchmark **FP32 vs dynamic INT8** → per-frame video report.
 
-**Private Artikate images/video are not in this repo yet** (awaiting their dataset link). See [`PRIVATE_DATA.md`](PRIVATE_DATA.md) for the drop-in checklist. Smoke metrics below only prove the pipeline runs.
+Written answers: [`ANSWERS.md`](ANSWERS.md) (Sections 1, 3, 4).
+
+## Why this dataset (proxy for a client hand-off)
+
+Artikate clarified that candidates should source a public annotated stand-in (~100–200 images). I used a **stratified 150-image subset of NEU-DET** (hot-rolled steel surface defects):
+
+| Item | Choice |
+|------|--------|
+| Source | [NEU-DET](https://github.com/KingRedMan/NEU-DET_Yolo) YOLO labels (Northeastern University steel defects) |
+| Scale | 120 train + 30 val (matches the assignment’s ~150-image pack) |
+| Classes | `crazing`, `inclusion`, `patches`, `pitted_surface`, `rolled-in_scale`, `scratches` |
+| Held-out video | ~30s @ 15fps from **unused official test** stills (`data/proxy_neu/video/heldout.mp4`) |
+
+**Why this is a reasonable proxy for an industrial-inspection client set**
+
+1. **Domain match:** Real mill-surface defects under industrial imaging — closer to Artikate’s inspection work than COCO “person/car”.
+2. **Annotation quality:** Established academic benchmark with box labels already in YOLO format (no synthetic boxes).
+3. **Difficulty:** Multi-class, low-contrast, texture-heavy defects — exposes failure modes (crazing misses, scratch over-fire) rather than toy shapes.
+4. **Honest limits:** Stills are small (~200²) and grayscale-ish; the held-out “video” is a slideshow of test stills, not a line-scan camera. I call that out rather than pretending it’s RTSP footage. Rebuild anytime with `python scripts/prepare_neu_proxy.py`.
+
+Details: [`data/proxy_neu/DATASET.md`](data/proxy_neu/DATASET.md).
 
 ## Hardware (this machine)
 
@@ -14,101 +34,63 @@ End-to-end industrial detection pipeline: fine-tune **YOLOv8n** → export **ONN
 | Inference | ONNX Runtime `CPUExecutionProvider` |
 | Quantization | ORT **dynamic INT8** on MatMul/Gemm (not TensorRT PTQ) |
 
-**Confidence those latency numbers hold elsewhere:** low for absolute ms. Relative FP32 vs INT8 trends may transfer; Jetson Orin + TensorRT will be much faster. Re-measure on the target device.
+**Confidence latency numbers hold elsewhere:** low for absolute ms. Relative FP32 vs INT8 trends may transfer; Jetson Orin + TensorRT will be much faster. Re-measure on the target device.
 
-Set `YOLO_CONFIG_DIR` to a writable path if Ultralytics cannot write `~/.config` (this repo uses `.ultralytics_config/`).
+```bash
+export YOLO_CONFIG_DIR="$PWD/.ultralytics_config"
+```
 
 ## Loom / screen recording
 
-Paste unlisted link here after recording the 5–8 min walkthrough on the **private** held-out clip:
-
 ```
-LOOM_URL: <paste after recording>
+LOOM_URL: <paste after recording on held-out clip>
 ```
 
-Suggested narration: env → train/load weights → export ONNX → INT8 → `infer_video.py` → show CSV + latency summary → `benchmark.py` → worst failure cases.
+Narrate: dataset choice → train → export → INT8 → `infer_video.py` → CSV/latency → FP32 vs INT8 → failure cases.
 
 ## Quick start
 
 ```bash
 cd Artikate_assignment
-# system Python with deps, or:
-python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
-
+source .venv/bin/activate   # or: python3 -m venv .venv && pip install -r requirements.txt
 export YOLO_CONFIG_DIR="$PWD/.ultralytics_config"
 
-# 1) Smoke dataset (synthetic) — or follow PRIVATE_DATA.md
-python3 scripts/prepare_smoke_data.py
+# Rebuild proxy data (if needed)
+python scripts/prepare_neu_proxy.py
 
-# 2) Train (CPU defaults: batch=2, workers=0)
-python3 scripts/train.py --data configs/data.yaml --epochs 30 --batch 2 --device cpu --workers 0
-
-# 3) Export + quantize
-python3 scripts/export_onnx.py --weights weights/best.pt
-python3 scripts/quantize_int8.py --onnx weights/best.onnx
-
-# 4) Val metrics
-python3 scripts/eval_val.py --weights weights/best.pt --data configs/data.yaml
-
-# 5) Held-out video (smoke path; swap for Artikate clip)
-python3 scripts/infer_video.py \
-  --model weights/best.onnx \
-  --video data/smoke/video/heldout_smoke.mp4 \
-  --save-vis
-
-# 6) FP32 vs INT8 latency
-python3 scripts/benchmark.py \
-  --fp32 weights/best.onnx \
-  --int8 weights/best_int8.onnx \
-  --video data/smoke/video/heldout_smoke.mp4
+python scripts/train.py --data configs/data.yaml --epochs 40 --batch 2 --device cpu --workers 0 --name neu_proxy_v1
+python scripts/export_onnx.py --weights weights/best.pt
+python scripts/quantize_int8.py
+python scripts/eval_val.py --weights weights/best.pt --data configs/data.yaml
+python scripts/infer_video.py --model weights/best.onnx --video data/proxy_neu/video/heldout.mp4
+python scripts/benchmark.py --fp32 weights/best.onnx --int8 weights/best_int8.onnx --video data/proxy_neu/video/heldout.mp4
 ```
 
-### Private dataset drop-in
-
-Full checklist: [`PRIVATE_DATA.md`](PRIVATE_DATA.md).
-
-1. Unpack into `data/artikate/` (YOLO layout).
-2. Fill `configs/data_artikate.yaml.example` (class names / `nc`) and use it as `--data`.
-3. Place held-out video at `data/artikate/video/heldout.mp4`.
-4. Re-run train → export → infer → benchmark → replace tables below and `results/FAILURE_CASES.md`.
-
-## Measured numbers
-
-### A) Smoke dry-run (synthetic — NOT submission numbers)
+## Measured numbers (NEU-DET proxy — submission)
 
 | Metric | FP32 ONNX | INT8 dynamic (MatMul/Gemm) |
 |--------|-----------|----------------------------|
-| Median latency (ms) | 120.4 | 96.1 |
-| p95 latency (ms) | 169.6 | 111.8 |
-| Val precision (PT) | 0.799 | n/a |
-| Val recall (PT) | 0.918 | n/a |
-| mAP50 (Ultralytics, PT) | 0.944 | n/a |
+| Median latency (ms) | **93.6** | **89.4** |
+| p95 latency (ms) | **100.7** | **103.5** |
+| Val precision (PT) | **0.560** | n/a |
+| Val recall (PT) | **0.477** | n/a |
+| mAP50 (Ultralytics, PT) | **0.551** | n/a |
+| mAP50-95 | **0.307** | n/a |
 
-Video (45 frames, FP32 ORT): median infer ~105 ms (`results/video_latency_summary.txt`).
+Video (90 frames sampled, FP32 ORT): median infer **~83 ms** (`results/video_latency_summary.txt`).  
+Per-frame boxes/conf/latency: `results/video_detections.csv`.  
+Worst cases: [`results/FAILURE_CASES.md`](results/FAILURE_CASES.md).
 
-### B) Private Artikate set (fill after link arrives)
-
-| Metric | FP32 ONNX | INT8 dynamic ONNX |
-|--------|-----------|-------------------|
-| Median latency (ms) | _TBD_ | _TBD_ |
-| p95 latency (ms) | _TBD_ | _TBD_ |
-| Val precision | _TBD_ | _TBD_ |
-| Val recall | _TBD_ | _TBD_ |
-| mAP50 (Ultralytics, PT) | _TBD_ | n/a |
-
-Artifacts: `results/benchmark.json`, `results/val_metrics.json`, `results/video_detections.csv`, `results/video_latency_summary.txt`.
+INT8 gain is small here because quantization is **weight-only MatMul/Gemm** on CPU ORT (full Conv INT8 emitted unsupported `ConvInteger` on this stack). On Orin TensorRT PTQ the tradeoff would differ — I’d re-benchmark there before claiming speedups.
 
 ## Repo map
 
-- `ANSWERS.md` — Sections 1, 3, 4
-- `PRIVATE_DATA.md` — drop-in steps when the dataset link arrives
-- `scripts/` — train, export, quantize, infer, benchmark, eval
-- `src/` — letterbox + ORT detector
-- `section3/` — silent-bug lab (swap if Artikate ships a different repo)
-- `tests/` — letterbox + Section 3 regression
+- `ANSWERS.md` — Sections 1 (incl. FP16 diagnostic table), 3, 4
+- `data/proxy_neu/` — stand-in client images/labels
+- `scripts/` — prepare, train, export, quantize, infer, benchmark, eval
+- `section3/` — silent-bug lab + regression test
+- `tests/` — letterbox + Section 3 tests
 
 ## GitHub
 
-Public repo: https://github.com/shivenswaroop/artikate-cv-takehome
-
-Loom still needs your screen recording after the private clip arrives (`LOOM_URL` above).
+https://github.com/shivenswaroop/artikate-cv-takehome

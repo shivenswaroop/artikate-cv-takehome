@@ -22,6 +22,8 @@ data/artikate/**
 !data/artikate/README.md
 !data/smoke/README.md
 data/_cache/
+.pip_tmp/
+*.cache
 
 # Keep small result summaries; ignore bulky dumps
 results/frames/

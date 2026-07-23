@@ -1,6 +1,8 @@
-# Private Artikate dataset — drop-in checklist
+# Dataset notes
 
-You do **not** have the private link yet. When Artikate sends it, do the following and re-run the pipeline. Do not invent metrics beforehand.
+Artikate clarified (email) that candidates should **source a public ~100–200 image stand-in**. This repo uses NEU-DET via `scripts/prepare_neu_proxy.py` → `data/proxy_neu/` (see README for proxy rationale).
+
+If a true private pack arrives later, use the drop-in steps below.
 
 ## 1. Unpack
 
