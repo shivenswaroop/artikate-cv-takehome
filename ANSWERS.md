@@ -12,30 +12,45 @@
 
 #### What I'd check first (order)
 
-1. **FP32 ONNX mAP on the same val set** (before blaming INT8).  
-   Isolates export / opset / NMS-in-graph / preprocessing parity from quantization.
-2. **Preprocess parity** between the PyTorch eval path and the ORT/TensorRT path: letterbox vs stretch, color order (RGB/BGR), normalize scale (`/255` vs ImageNet stats), pad color, `imgsz`, dynamic vs static shapes.
-3. **INT8 calibration set**: size, class/background coverage, whether it was random ImageNet crops vs real line imagery, and whether calibration ran with the *same* preprocess as inference.
-4. **Where NMS / decode lives**: postprocess in Python vs baked into the ONNX graph; compare box decode (xywh→xyxy, stride/anchor assumptions) FP32 vs INT8.
-5. **Quantization recipe**: PTQ vs QAT, per-tensor vs per-channel weights, which layers were forced INT8 (esp. detection head / SiLU-heavy blocks), TensorRT vs ORT calibrator.
-6. **Eval harness bugs**: confidence threshold, IoU matching, class mapping, or different NMS IoU between the two runs that coincidentally look like “quantization hurt.”
+1. **FP32 ONNX / TensorRT FP32 engine mAP** on the same val set.  
+   Isolates export, opset, NMS-in-graph, and preprocess parity from *any* reduced-precision path.
+2. **FP16 checkpoint / TensorRT FP16 engine mAP next** (before INT8).  
+   Artikate did not provide an FP16 number — that is intentional. Checking FP16 yourself is the cleanest way to separate “export/preprocess broke” from “INT8 quantization broke.” See outcome table below.
+3. **Preprocess parity** between the PyTorch eval path and the ORT/TensorRT path: letterbox vs stretch, color order (RGB/BGR), normalize scale (`/255` vs ImageNet stats), pad color, `imgsz`, dynamic vs static shapes.
+4. **INT8 calibration set**: size, class/background coverage, whether it was random ImageNet crops vs real line imagery, and whether calibration ran with the *same* preprocess as inference.
+5. **Where NMS / decode lives**: postprocess in Python vs baked into the ONNX graph; compare box decode (xywh→xyxy, stride/anchor assumptions) FP32 vs INT8.
+6. **Quantization recipe**: PTQ vs QAT, per-tensor vs per-channel weights, which layers were forced INT8 (esp. detection head / SiLU-heavy blocks), TensorRT vs ORT calibrator.
+7. **Eval harness bugs**: confidence threshold, IoU matching, class mapping, or different NMS IoU between the two runs that coincidentally look like “quantization hurt.”
+
+#### FP16 diagnostic — hypotheses for each outcome
+
+Hold the exported graph and preprocess fixed; only change precision to FP16 (TensorRT FP16 engine, or ONNX Runtime with FP16 where supported). Interpret against the known FP32 PyTorch baseline (0.91) and the reported INT8 result (0.58):
+
+| FP16 mAP (hypothesis) | What it implies | Next action |
+|-----------------------|-----------------|-------------|
+| **≈ FP32 (~0.88–0.91)** | Export + preprocess are healthy. The collapse is **INT8-specific** (bad calibration, sensitive layers, or INT8 kernel/NMS quirks). | Recalibrate INT8 on line imagery; try mixed precision (FP16 head / INT8 backbone); consider QAT. |
+| **Already collapsed (~0.55–0.65, similar to INT8)** | Failure is **upstream of INT8** — export, TRT parse/fuse, preprocess mismatch, or NMS/decode baked wrong. INT8 is a red herring. | Diff preprocess tensors; compare FP32 ONNX vs PyTorch box-for-box; rebuild engine without plugins that alter decode. |
+| **Mild drop (~0.80–0.87)** | Export mostly OK; some numerical sensitivity. INT8 then amplifies that into the 0.58 cliff. | Fix any mild preprocess drift first, then INT8 with better calibration / partial FP16. |
+| **FP16 OK but INT8 fails only on Orin TRT (ORT INT8 OK)** | Device/engine-specific (calibrator, layer fusion, DLA). | Rebuild TRT with explicit layer precision constraints; verify calibrator cache matches preprocess. |
+
+I would not wait for a vendor-provided FP16 number — running that one eval is cheap and partitions the search space before touching calibration.
 
 #### Three independent root causes + distinguishing tests
 
 | # | Root cause | Distinguishing test |
 |---|------------|---------------------|
-| 1 | **Export / preprocess mismatch** (not quantization): letterbox or normalize differs in the ONNX path, so boxes/scores are wrong even in FP32 ONNX. | Evaluate **FP32 ONNX** with identical preprocess logging (input tensor hash / mean). If mAP already collapses here, INT8 is a red herring. |
-| 2 | **Bad or non-representative INT8 calibration** (clean lab images / too few samples / wrong distribution). | Keep the same export; recalibrate with **≥200–500 real line frames** covering defects + backgrounds. If mAP recovers sharply, calibration was the cause. |
-| 3 | **Quantization-sensitive layers** (detection head / late neck activations with heavy outliers). | Layer-wise or partial precision: leave head (and maybe last neck blocks) in FP16/FP32; INT8 the backbone only. If hybrid recovers most mAP, sensitivity—not total export failure—is the cause. |
+| 1 | **Export / preprocess mismatch** (not quantization): letterbox or normalize differs in the deployed path, so boxes/scores are wrong even before INT8. | FP32 ONNX/TRT mAP + **FP16** mAP. If either already collapses, INT8 is not the root cause. |
+| 2 | **Bad or non-representative INT8 calibration** (clean lab images / too few samples / wrong distribution). | FP16 ≈ FP32, but INT8 collapses; recalibrate with **≥200–500 real line frames**. Sharp recovery ⇒ calibration. |
+| 3 | **Quantization-sensitive layers** (detection head / late neck activations with heavy outliers). | FP16 ≈ FP32; INT8 hybrid with head left in FP16 recovers most mAP ⇒ sensitivity, not total export failure. |
 
 (Other common causes exist—e.g. TensorRT falling back / differently fusing NMS—but the three above each alone can produce ~0.91→0.58.)
 
 #### Fix and pre-redeploy validation
 
-1. Restore **FP32 ONNX** (or TensorRT FP16) to ≥ baseline−ε on the client val set; freeze that preprocess + export script.
+1. Restore **FP32 ONNX** and confirm **FP16** ≥ baseline−ε on the client val set; freeze that preprocess + export script.
 2. Recalibrate INT8 on **production-representative** crops; if still short, use **mixed precision** (INT8 backbone, FP16 head) or short **QAT**.
 3. Gate redeploy: same val protocol, report mAP@0.5 / mAP@0.5:0.95, per-class AP, and a fixed confidence operating point (precision/recall on the line’s defect classes).  
-4. **Shadow run** on Orin with recorded line video: compare FP32 vs INT8 detections frame-by-frame; only cut over if drop is within the client’s tolerance (and latency still meets budget).
+4. **Shadow run** on Orin with recorded line video: compare FP16 vs INT8 detections frame-by-frame; only cut over if drop is within the client’s tolerance (and latency still meets budget).
 
 ---
 
