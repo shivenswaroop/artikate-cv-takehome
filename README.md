@@ -40,6 +40,16 @@ Details: [`data/proxy_neu/DATASET.md`](data/proxy_neu/DATASET.md).
 export YOLO_CONFIG_DIR="$PWD/.ultralytics_config"
 ```
 
+## Run on free Colab GPU
+
+Open this notebook (Runtime → GPU):
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/shivenswaroop/artikate-cv-takehome/blob/main/notebooks/artikate_colab.ipynb)
+
+Direct link: https://colab.research.google.com/github/shivenswaroop/artikate-cv-takehome/blob/main/notebooks/artikate_colab.ipynb
+
+It clones this repo, trains on GPU, exports ONNX, runs video infer + FP32/INT8 benchmark, and zips artifacts for download.
+
 ## Loom / screen recording
 
 ```
